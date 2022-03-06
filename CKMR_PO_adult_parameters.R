@@ -21,7 +21,7 @@ library(optimx)
 rm(list=ls())
 
 # Directory where the data is:
-# setwd("...")
+setwd("...")
 
 # Initialize the number of sampled individuals of each life stage:
 numSampledLarvae <- 0
@@ -1087,14 +1087,14 @@ logLike_FOP <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
 # MAXIMUM-LIKELIHOOD PARAMETER INFERENCE:                                             #
 #######################################################################################
 
-# Log likelihood of all parent-offspring pair data:
+# Log likelihood of all parent-offspring & full-sibling pair data:
 
 logLike_all <- function(AdultPars) {
   
   # Extract parameters that we are varying from the AdultPars vector:  
-  N_A <- AdultPars[1]
+  N_A <- AdultPars[1] * OptimScale
   mu_A <- AdultPars[2]
-
+  
   # Parameters that we are setting constant in the life history model (comment
   # out the ones you are trying to estimate):
   # N_A <- 3000 # Total adult mosquito population size (females & males)
@@ -1153,16 +1153,17 @@ logLike_all <- function(AdultPars) {
 # Choose initial values of N_A & mu_A for the optimization algorithm:
 N_A <- 2500
 mu_A <- 0.1
-AdultPars <- c(N_A, mu_A)
+OptimScale <- N_A/mu_A
+AdultPars <- c(N_A / OptimScale, mu_A)
 
 # Choose lower & upper limits of N_A & mu_A for optimization algorithm:
 N_A_lower <- 1000
 mu_A_lower <- 0.05
-AdultPars_lower <- c(N_A_lower, mu_A_lower)
+AdultPars_lower <- c(N_A_lower / OptimScale, mu_A_lower)
 
 N_A_upper <- 5000
 mu_A_upper <- 0.15
-AdultPars_upper <- c(N_A_upper, mu_A_upper)
+AdultPars_upper <- c(N_A_upper / OptimScale, mu_A_upper)
 
 # Find the values of N_A & mu_A that maximize the likelihood of the parent-offspring
 # data:
@@ -1170,7 +1171,7 @@ AdultPars_fit <- optimx(par=AdultPars, fn=logLike_all, method = "nlminb",
                         upper = AdultPars_upper, lower = AdultPars_lower)
 
 # The estimated values of the adult parameters given the kinship data are:
-N_A_fit <- AdultPars_fit$p1
+N_A_fit <- AdultPars_fit$p1 * OptimScale
 mu_A_fit <- AdultPars_fit$p2
 
 N_A_fit
