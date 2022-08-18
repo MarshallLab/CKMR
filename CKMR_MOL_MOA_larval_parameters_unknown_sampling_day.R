@@ -3,12 +3,13 @@
 ##                                                                                   ##
 ## This code calculates the kinship probabilities and likelihood of observed close-  ##
 ## kin pairs considering mother-larval offspring and mother-adult offspring          ##
-## combinations. The code then implements a grid search algorithm to estimate the    ##
-## daily larval mortality rate (mu_L) and duration of the larval life stage (T_L)    ##
-## that maximize the likelihood given the data.                                      ##
+## combinations when the day of capture is only known within the interval between    ##
+## samples. The code then implements a grid search algorithm to estimate the daily   ##
+## larval mortality rate (mu_L) and duration of the larval life stage (T_L) that     ##
+## maximize the likelihood given the data.                                           ##
 ##                                                                                   ##
 ## Code written by John Marshall: john.marshall@berkeley.edu                         ##
-## Date: April 6th, 2022                                                             ##
+## Date: July 15th, 2022                                                             ##
 ## Reference: Sharma Y, Bennett JB, Rasic G, Marshall JM (2022) Close-kin mark-      ##
 ## recapture methods to estimate demographic parameters of mosquitoes. bioRxiv doi:  ##
 ## https://www.biorxiv.org/content/10.1101/2022.02.19.481126v1                       ##
@@ -34,21 +35,29 @@ numSampledAdults <- 0
 if (file.exists("cut_L.csv")) { 
   sampledLarvae <- read.csv("cut_L.csv") 
   numSampledLarvae <- length(sampledLarvae[,1])
+  samplingDaysLarvae <- sort(unique(sampledLarvae$Time))
+  numSamplingDaysLarvae <- length(samplingDaysLarvae)
 }
 
 # if (file.exists("cut_P.csv")) { 
-#   sampledPupae <- read.csv("cut_P.csv") 
-#   numSampledPupae <- length(sampledPupae[,1])
+#  sampledPupae <- read.csv("cut_P.csv") 
+#  numSampledPupae <- length(sampledPupae[,1])
+#  samplingDaysPupae <- sort(unique(sampledPupae$Time))
+#  numSamplingDaysPupae <- length(samplingDaysPupae)
 # }
 
 if (file.exists("cut_M.csv")) { 
   sampledAdultMales <- read.csv("cut_M.csv") 
   numSampledAdultMales <- length(sampledAdultMales[,1])
+  samplingDaysAdultMales <- sort(unique(sampledAdultMales$Time))
+  numSamplingDaysAdultMales <- length(samplingDaysAdultMales)
 }
 
 if (file.exists("cut_F.csv")) { 
   sampledAdultFemales <- read.csv("cut_F.csv") 
   numSampledAdultFemales <- length(sampledAdultFemales[,1])
+  samplingDaysAdultFemales <- sort(unique(sampledAdultFemales$Time))
+  numSamplingDaysAdultFemales <- length(samplingDaysAdultFemales)
 }
 
 numSampledAdults <- numSampledAdultMales + numSampledAdultFemales
@@ -59,12 +68,18 @@ if (numSampledAdultMales > 0) {
 }
 if ((numSampledAdultMales > 0) && (numSampledAdultFemales > 0)) {
   sampledAdults <- rbind(sampledAdultFemales,sampledAdultMales)
+  samplingDaysAdults <- sort(unique(c(sampledAdultMales$Time, sampledAdultFemales$Time)))
+  numSamplingDaysAdults <- length(samplingDaysAdults)
 }
 if ((numSampledAdultMales > 0) && (numSampledAdultFemales == 0)) {
   sampledAdults <- sampledAdultMales
+  samplingDaysAdults <- samplingDaysAdultMales
+  numSamplingDaysAdults <- length(samplingDaysAdults)
 }
 if ((numSampledAdultMales == 0) && (numSampledAdultFemales > 0)) {
   sampledAdults <- sampledAdultFemales
+  samplingDaysAdults <- samplingDaysAdultFemales
+  numSamplingDaysAdults <- length(samplingDaysAdults)
 }
 
 # Record start & stop time of sampling of mosquitoes of any life stage:
@@ -217,6 +232,10 @@ logLike_MOL <- function(mu_L) {
   #####################################################################################
   ## CALCULATE LIKELIHOOD OF MOTHER-OFFSPRING (LARVA) PAIR DATA:                     ##
   #####################################################################################
+
+  # Buffer days account for uncertainty over day of sampling:
+  bufferDays_L <- (samplingDaysLarvae[3] - samplingDaysLarvae[2] - 1)
+  bufferDays_M <- (samplingDaysAdultFemales[3] - samplingDaysAdultFemales[2] - 1)
   
   # Format data into a 2D array containing the number of sampled larvae, w, on day t2 
   # (first index) that have mothers among the sampled adult females on day t2-t2Minust1
@@ -246,9 +265,45 @@ logLike_MOL <- function(mu_L) {
         MOL_Data_Array[i, j] <- w
         
         if (y > 0) {
+          
+          # Earliest day that the larva could have been sampled:
+          if (larvaSamplingTimeI == min(samplingDaysLarvae)) {
+            tEarliest_L <- larvaSamplingTimeI - bufferDays_L
+          } else {
+            tEarliest_L <- max(samplingDaysLarvae[samplingDaysLarvae<larvaSamplingTimeI]) + 1
+          }
+          
+          # Latest day that the larva could have been sampled:
+          tLatest_L <- larvaSamplingTimeI
+          
+          # Number of days over which the larva could have been sampled:
+          numDaysSampled_L <- tLatest_L - tEarliest_L + 1
+          
+          # Earliest day that the adult female (mother) could have been sampled:
+          if (motherSamplingTimeJ == min(samplingDaysAdultFemales)) {
+            tEarliest_M <- motherSamplingTimeJ - bufferDays_M
+          } else {
+            tEarliest_M <- max(samplingDaysAdultFemales[samplingDaysAdultFemales<motherSamplingTimeJ]) + 1
+          }
+          
+          # Latest day that the adult female (mother) could have been sampled:
+          tLatest_M <- motherSamplingTimeJ
+          
+          # Number of days over which the adult female (mother) could have been sampled:
+          numDaysSampled_M <- tLatest_M - tEarliest_M + 1
+          
+          P_MOL_mean <- 0
+          for (tM in tEarliest_M:tLatest_M) {
+            for (tL in tEarliest_L:tLatest_L) {
+              if ((tL-tM) %in% t2Minust1) {
+                P_MOL_mean <- P_MOL_mean + (P_MOL[which(t2Minust1==(tL-tM))]/(numDaysSampled_M * numDaysSampled_L))
+              }
+            }
+          }
+          
           # Probability that a given sampled larva on day t2 has a mother among the y
           # sampled adult females on day t1:
-          z <- 1 - ((1 - P_MOL[j])^y)
+          z <- 1 - ((1 - P_MOL_mean)^y)
           
           # Now calculate the log likelihood that w sampled larvae on day t2 have mothers 
           # among the sampled adult females on day t1:
@@ -380,6 +435,10 @@ logLike_MOA <- function(T_L) {
   ## CALCULATE LIKELIHOOD OF MOTHER-OFFSPRING (ADULT) PAIR DATA:                     ##
   #####################################################################################
   
+  # Buffer days account for uncertainty over day of sampling:
+  bufferDays_M <- (samplingDaysAdultFemales[3] - samplingDaysAdultFemales[2] - 1)
+  bufferDays_A <- (samplingDaysAdults[3] - samplingDaysAdults[2] - 1)
+  
   # Format data into a 2D array containing the number of sampled adults, w, on day t2 
   # (first index) that have mothers among the sampled adult females on day t2-t2Minust1
   # (second index). Also calculate the log likelihood that, for x sampled adults on day
@@ -389,7 +448,7 @@ logLike_MOA <- function(T_L) {
                           dim=c(length(samplingDays), length(t2Minust1)))
   logLike <- 0
   
-  for (i in 1:length(samplingDays)) {
+  for (i in (min(which(dailySampledAdults>0))):length(samplingDays)) {
     adultSamplingTimeI <- samplingDays[i]
     x <- dailySampledAdults[i] # Number of sampled adults on day t2
     
@@ -409,9 +468,45 @@ logLike_MOA <- function(T_L) {
         MOA_Data_Array[i, j] <- w
         
         if (y > 0) {
+          
+          # Earliest day that the adult offspring could have been sampled:
+          if (adultSamplingTimeI == min(samplingDaysAdults)) {
+            tEarliest_A <- adultSamplingTimeI - bufferDays_A
+          } else {
+            tEarliest_A <- max(samplingDaysAdults[samplingDaysAdults<adultSamplingTimeI]) + 1
+          }
+          
+          # Latest day that the adult offspring could have been sampled:
+          tLatest_A <- adultSamplingTimeI
+          
+          # Number of days over which the adult offsrping could have been sampled:
+          numDaysSampled_A <- tLatest_A - tEarliest_A + 1
+          
+          # Earliest day that the adult female (mother) could have been sampled:
+          if (motherSamplingTimeJ == min(samplingDaysAdultFemales)) {
+            tEarliest_M <- motherSamplingTimeJ - bufferDays_M
+          } else {
+            tEarliest_M <- max(samplingDaysAdultFemales[samplingDaysAdultFemales<motherSamplingTimeJ]) + 1
+          }
+          
+          # Latest day that the adult female (mother) could have been sampled:
+          tLatest_M <- motherSamplingTimeJ
+          
+          # Number of days over which the adult female (mother) could have been sampled:
+          numDaysSampled_M <- tLatest_M - tEarliest_M + 1
+          
+          P_MOA_mean <- 0
+          for (tM in tEarliest_M:tLatest_M) {
+            for (tA in tEarliest_A:tLatest_A) {
+              if ((tA-tM) %in% t2Minust1) {
+                P_MOA_mean <- P_MOA_mean + (P_MOA[which(t2Minust1==(tA-tM))]/(numDaysSampled_M * numDaysSampled_A))
+              }
+            }
+          }
+          
           # Probability that a given sampled adult on day t2 has a mother among the y
           # sampled adult females on day t1:
-          z <- 1 - ((1 - P_MOA[j])^y)
+          z <- 1 - ((1 - P_MOA_mean)^y)
           
           # Now calculate the log likelihood that w sampled adults on day t2 have mothers 
           # among the sampled adult females on day t1:
@@ -437,12 +532,12 @@ T_L_values <- seq(from=1, to=10, length.out=num_T_L_values)
 mu_L_values <- rep(0, 10)
 logLike_values <- rep(0, num_T_L_values)
 
-for (i in 1:num_T_L_values) {
+for (iTL in 1:num_T_L_values) {
   print("Iteration:")
-  print(i)
+  print(iTL)
   
   # The value of T_L for this iteration:
-  T_L <- T_L_values[i]
+  T_L <- T_L_values[iTL]
   
   # Parameters that we are setting constant in the life history model (comment
   # out the ones you are trying to estimate):
@@ -453,7 +548,7 @@ for (i in 1:num_T_L_values) {
   T_E <- 2 # Duration of the egg stage (days)
   # T_L <- 5 # Duration of the larval stage (days)
   T_P <- 1 # Duration of the pupal stage (days)
-  T_A <- 67 # Maximum adult lifespan considered (days)
+  T_A <- 40 # Maximum adult lifespan considered (days)
   
   rM <- 1.175 # Daily mosquito population growth rate
   beta <- 20 # Daily egg production rate
@@ -473,15 +568,15 @@ for (i in 1:num_T_L_values) {
   mu_L <- 0.5
   
   # Find the value of mu_L that maximizes the likelihood of the mother-larval offspring data:
-  mu_L_optim <- optimx(par=mu_L, fn=logLike_MOL, method = "nlminb", upper = 0.96, lower = 0.0001)
-  mu_L_values[i] <- mu_L_optim$p1
+  mu_L_optim <- optimx(par=mu_L, fn=logLike_MOL, method = "nlminb", upper = 0.96, lower = 0.01)
+  mu_L_values[iTL] <- mu_L_optim$p1
   
   # Update mu_L as the maximum-likelihood estimate given this value of T_L:
   mu_L <- mu_L_optim$p1
   
   # Calculate the likelihood of the mother-adult offspring data given this value 
   # of T_L & the optimal value of mu_L:
-  logLike_values[i] <- logLike_MOA(T_L_values[i])
+  logLike_values[iTL] <- logLike_MOA(T_L_values[iTL])
 }
 
 # The estimated values of the larval parameters given the kinship data are:
@@ -490,3 +585,4 @@ mu_L_fit <- mu_L_values[which.min(logLike_values)]
 
 T_L_fit
 mu_L_fit
+ 

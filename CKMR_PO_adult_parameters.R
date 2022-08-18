@@ -8,7 +8,7 @@
 ## daily adult mortality rate (mu_A) that maximize the likelihood given the data.    ##
 ##                                                                                   ##
 ## Code written by John Marshall: john.marshall@berkeley.edu                         ##
-## Date: February 21st, 2022                                                         ##
+## Date: April 6th, 2022                                                             ##
 ## Reference: Sharma Y, Bennett JB, Rasic G, Marshall JM (2022) Close-kin mark-      ##
 ## recapture methods to estimate demographic parameters of mosquitoes. bioRxiv doi:  ##
 ## https://www.biorxiv.org/content/10.1101/2022.02.19.481126v1                       ##
@@ -123,7 +123,7 @@ logLike_MOL <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   
   Denominator <- 0
   t2 <- 0 # The denominator should be the same for any t2
-  for (y2 in (t2 - T_E - T_L):(t2 - T_E)) {
+  for (y2 in (t2 - T_E - (T_L-1)):(t2 - T_E)) {
     Denominator <- Denominator + (N_F * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^(t2 - y2 - T_E)))
   }
   
@@ -131,18 +131,18 @@ logLike_MOL <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   # This is the expected number of larvae at day t2 from an adult female sampled at 
   # time t1.
   # * By default, let t1 = 0, as the same equation will apply at all times.
-  # * Earliest possible t2 is (-T_A + T_E), if the mother was caught at the end of her
-  #   life & gave birth to the offspring soon after emergence.
-  # * Latest possible t2 is (T_E + T_L), if the the mother gave birth at the time of 
-  #   sampling & the larva was caught at the end of its life.
-  # * So we will explore (-T_A + T_E) <= t2 <= (T_E + T_L)
+  # * Earliest possible t2 is (-(T_A-1) + T_E), if the mother was caught at the end
+  #   of her life & gave birth to the offspring soon after emergence.
+  # * Latest possible t2 is (T_E + (T_L-1)), if the the mother gave birth at the time
+  #   of sampling & the larva was caught at the end of its life.
+  # * So we will explore (-(T_A-1) + T_E) <= t2 <= (T_E + (T_L-1))
   
-  Numerator <- rep(0, (abs(-T_A + T_E) + (T_E + T_L) + 1))
+  Numerator <- rep(0, (abs(-(T_A-1) + T_E) + (T_E + (T_L-1)) + 1))
   
   # Probability of adult surviving from 0 to T_A days:
-  AdultSurvivalProbability <- rep(0, (T_A + 1))
-  AdultAge <- rep(0, (T_A + 1))
-  for (i in 1:(T_A + 1)){
+  AdultSurvivalProbability <- rep(0, T_A)
+  AdultAge <- rep(0, T_A)
+  for (i in 1:T_A) {
     AdultSurvivalProbability[i] <- (1 - mu_A)^(i-1)
     AdultAge[i] <- i - 1
   }
@@ -151,11 +151,11 @@ logLike_MOL <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   AdultAgeProbability <- AdultSurvivalProbability / sum(AdultSurvivalProbability)
   
   t1 <- 0 # The relative difference between t1 & t2 is what matters
-  t2 <- seq((-T_A + T_E), (T_E + T_L), by=1)
+  t2 <- seq((-(T_A-1) + T_E), (T_E + (T_L-1)), by=1)
   
   for (i in 1:length(t2)) { 
-    for (y2 in (t2[i] - T_E - T_L):(t2[i] - T_E)) {
-      if ((y2 >= (t1 - T_A)) && (y2 <= t1)) {
+    for (y2 in (t2[i] - T_E - (T_L-1)):(t2[i] - T_E)) {
+      if ((y2 >= (t1 - (T_A-1))) && (y2 <= t1)) {
         Numerator[i] <- Numerator[i] + ((1 - mu_A)^(t1 - y2) 
                                         * beta * ((1 - mu_E)^T_E)
                                         * ((1 - mu_L)^(t2[i] - y2 - T_E)))
@@ -282,7 +282,7 @@ logLike_MOA <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   
   Denominator <- 0
   t2 <- 0 # The denominator should be the same for any t2
-  for (y2 in (t2 - T_E - T_L - T_P - T_A):(t2 - T_E - T_L - T_P)) {
+  for (y2 in (t2 - T_E - T_L - T_P - (T_A-1)):(t2 - T_E - T_L - T_P)) {
     Denominator <- Denominator + (N_F * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^T_L)
                                   * ((1 - mu_P)^T_P) 
                                   * ((1 - mu_A)^(t2 - y2 - T_E - T_L - T_P)))
@@ -293,18 +293,18 @@ logLike_MOA <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   # time t1.
   # * By default, let t1 = 0, as the same equation will apply at all times (it's the
   #   difference between t1 & t2 that matters).
-  # * Earliest possible t2 is (-T_A + T_E + T_L + T_P), if the mother was caught at the 
+  # * Earliest possible t2 is (-(T_A-1) + T_E + T_L + T_P), if the mother was caught at the 
   #   end of her life & gave birth to the offspring soon after emergence.
-  # * Latest possible t2 is (T_E + T_L + + T_P + T_A), if the the mother gave birth at 
+  # * Latest possible t2 is (T_E + T_L + + T_P + (T_A-1)), if the the mother gave birth at 
   #   the time of sampling & the adult offspring was caught at the end of its life.
-  # * So we will explore (-T_A + T_E + T_L + T_P) <= t2 <= (T_E + T_L + T_P + T_A).
+  # * So we will explore (-(T_A-1) + T_E + T_L + T_P) <= t2 <= (T_E + T_L + T_P + (T_A-1)).
   
-  Numerator <- rep(0, (abs(-T_A + T_E + T_L + T_P) + (T_E + T_L + T_P + T_A) + 1))
+  Numerator <- rep(0, (abs(-(T_A-1) + T_E + T_L + T_P) + (T_E + T_L + T_P + (T_A-1)) + 1))
   
   # Probability of adult surviving from 0 to T_A days:
-  AdultSurvivalProbability <- rep(0, (T_A + 1))
-  AdultAge <- rep(0, (T_A + 1))
-  for (i in 1:(T_A + 1)){
+  AdultSurvivalProbability <- rep(0, T_A)
+  AdultAge <- rep(0, T_A)
+  for (i in 1:T_A) {
     AdultSurvivalProbability[i] <- (1 - mu_A)^(i-1)
     AdultAge[i] <- i - 1
   }
@@ -313,11 +313,11 @@ logLike_MOA <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   AdultAgeProbability <- AdultSurvivalProbability / sum(AdultSurvivalProbability)
   
   t1 <- 0 # The relative difference between t1 & t2 is what matters
-  t2 <- seq((-T_A + T_E + T_L + T_P), (T_E + T_L + T_P + T_A), by=1)
+  t2 <- seq((-(T_A-1) + T_E + T_L + T_P), (T_E + T_L + T_P + (T_A-1)), by=1)
   
   for (i in 1:length(t2)) { 
-    for (y2 in (t2[i] - T_E - T_L - T_P - T_A):(t2[i] - T_E - T_L - T_P)) {
-      if ((y2 >= (t1 - T_A)) && (y2 <= t1)) {
+    for (y2 in (t2[i] - T_E - T_L - T_P - (T_A-1)):(t2[i] - T_E - T_L - T_P)) {
+      if ((y2 >= (t1 - (T_A-1))) && (y2 <= t1)) {
         Numerator[i] <- Numerator[i] + ((1 - mu_A)^(t1 - y2) 
                                         * beta * ((1 - mu_E)^T_E)
                                         * ((1 - mu_L)^T_L) * ((1 - mu_P)^T_P)
@@ -446,7 +446,7 @@ logLike_FOL <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   
   Denominator <- 0
   t2 <- 0 # The denominator should be the same for any t2
-  for (y2 in (t2 - T_E - T_L):(t2 - T_E)) {
+  for (y2 in (t2 - T_E - (T_L-1)):(t2 - T_E)) {
     Denominator <- Denominator + (N_F * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^(t2 - y2 - T_E)))
   }
   
@@ -454,20 +454,20 @@ logLike_FOL <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   # This is the expected number of larvae at day t2 from an adult male sampled at 
   # time t1.
   # * By default, let t1 = 0, as the same equation will apply at all times.
-  # * Earliest possible t2 is (-T_A + T_E), if the father was caught at the end of his
+  # * Earliest possible t2 is (-(T_A-1) + T_E), if the father was caught at the end of his
   #   life, but mated at the beginning of his life, & if the mother gave birth soon after
   #   mating, & the larva was caught soon after emergence.
-  # * Latest possible t2 is (T_A + T_E + T_L), if the the father was caught soon after 
+  # * Latest possible t2 is ((T_A-1) + T_E + (T_L-1)), if the the father was caught soon after 
   #   mating, the mother mated at the beginning of her life & laid eggs at the end of her
   #   life, & the larva was caught very soon before developing into a pupa.
-  # * So we will explore (-T_A + T_E) <= t2 <= (T_A + T_E + T_L)
+  # * So we will explore (-(T_A-1) + T_E) <= t2 <= ((T_A-1) + T_E + (T_L-1))
   
-  Numerator <- rep(0, (abs(-T_A + T_E) + (T_A + T_E + T_L) + 1))
+  Numerator <- rep(0, (abs(-(T_A-1) + T_E) + ((T_A-1) + T_E + (T_L-1)) + 1))
   
   # Probability of adult surviving from 0 to T_A days:
-  AdultSurvivalProbability <- rep(0, (T_A + 1))
-  AdultAge <- rep(0, (T_A + 1))
-  for (i in 1:(T_A + 1)){
+  AdultSurvivalProbability <- rep(0, T_A)
+  AdultAge <- rep(0, T_A)
+  for (i in 1:T_A) {
     AdultSurvivalProbability[i] <- (1 - mu_A)^(i-1)
     AdultAge[i] <- i - 1
   }
@@ -476,12 +476,12 @@ logLike_FOL <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   AdultAgeProbability <- AdultSurvivalProbability / sum(AdultSurvivalProbability)
   
   t1 <- 0 # The relative difference between t1 & t2 is what matters
-  t2 <- seq((-T_A + T_E), (T_A + T_E + T_L), by=1)
+  t2 <- seq((-(T_A-1) + T_E), ((T_A-1) + T_E + (T_L-1)), by=1)
   
   for (i in 1:length(t2)) { 
-    for (tk in (t1 - T_A):t1) {
-      for (y2 in tk:(tk + T_A)) {
-        if ((t2[i] >= (y2 + T_E)) && (t2[i] <= (y2 + T_E + T_L))) {
+    for (tk in (t1 - (T_A-1)):t1) {
+      for (y2 in tk:(tk + (T_A-1))) {
+        if ((t2[i] >= (y2 + T_E)) && (t2[i] <= (y2 + T_E + (T_L-1)))) {
           Numerator[i] <- Numerator[i] + (AdultAgeProbability[which(AdultAge==(t1 - tk))] 
                                           * ((1 - mu_A)^(y2 - tk))
                                           * beta * ((1 - mu_E)^T_E)
@@ -610,7 +610,7 @@ logLike_FOA <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   
   Denominator <- 0
   t2 <- 0 # The denominator should be the same for any t2
-  for (y2 in (t2 - T_E - T_L - T_P - T_A):(t2 - T_E - T_L - T_P)) {
+  for (y2 in (t2 - T_E - T_L - T_P - (T_A-1)):(t2 - T_E - T_L - T_P)) {
     Denominator <- Denominator + (N_F * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^T_L)
                                   * ((1 - mu_P)^T_P) 
                                   * ((1 - mu_A)^(t2 - y2 - T_E - T_L - T_P)))
@@ -620,20 +620,20 @@ logLike_FOA <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   # This is the expected number of adult offspring at day t2 from an adult male sampled at 
   # time t1.
   # * By default, let t1 = 0, as the same equation will apply at all times.
-  # * Earliest possible t2 is (-T_A + T_E + T_L + T_P), if the father was caught at the
+  # * Earliest possible t2 is (-(T_A-1) + T_E + T_L + T_P), if the father was caught at the
   #   end of his life, but mated at the beginning of his life, & if the mother gave birth
   #   soon after mating, & the adult offspring was caught soon after emergence.
-  # * Latest possible t2 is (T_A + T_E + T_L + T_P + T_A), if the the father was caught 
+  # * Latest possible t2 is ((T_A-1) + T_E + T_L + T_P + (T_A-1)), if the the father was caught 
   #   soon after mating, the mother mated at the beginning of her life & laid eggs at the
   #   end of her life, & the adult offspring was caught at the end of its life.
-  # * So we will explore (-T_A + T_E + T_L + T_P) <= t2 <= (T_A + T_E + T_L + T_P + T_A)
+  # * So we will explore (-(T_A-1) + T_E + T_L + T_P) <= t2 <= ((T_A-1) + T_E + T_L + T_P + (T_A-1))
   
-  Numerator <- rep(0, (abs(-T_A + T_E + T_L + T_P) + (T_A + T_E + T_L + T_P + T_A) + 1))
+  Numerator <- rep(0, (abs(-(T_A-1) + T_E + T_L + T_P) + ((T_A-1) + T_E + T_L + T_P + (T_A-1)) + 1))
   
   # Probability of adult surviving from 0 to T_A days:
-  AdultSurvivalProbability <- rep(0, (T_A + 1))
-  AdultAge <- rep(0, (T_A + 1))
-  for (i in 1:(T_A + 1)){
+  AdultSurvivalProbability <- rep(0, T_A)
+  AdultAge <- rep(0, T_A)
+  for (i in 1:T_A) {
     AdultSurvivalProbability[i] <- (1 - mu_A)^(i-1)
     AdultAge[i] <- i - 1
   }
@@ -642,12 +642,12 @@ logLike_FOA <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   AdultAgeProbability <- AdultSurvivalProbability / sum(AdultSurvivalProbability)
   
   t1 <- 0 # The relative difference between t1 & t2 is what matters
-  t2 <- seq((-T_A + T_E + T_L + T_P), (T_A + T_E + T_L + T_P + T_A), by=1)
+  t2 <- seq((-(T_A-1) + T_E + T_L + T_P), ((T_A-1) + T_E + T_L + T_P + (T_A-1)), by=1)
   
   for (i in 1:length(t2)) { 
-    for (tk in (t1 - T_A):t1) {
-      for (y2 in tk:(tk + T_A)) {
-        if ((t2[i] >= (y2 + T_E + T_L + T_P)) && (t2[i] <= (y2 + T_E + T_L + T_P + T_A))) {
+    for (tk in (t1 - (T_A-1)):t1) {
+      for (y2 in tk:(tk + (T_A-1))) {
+        if ((t2[i] >= (y2 + T_E + T_L + T_P)) && (t2[i] <= (y2 + T_E + T_L + T_P + (T_A-1)))) {
           Numerator[i] <- Numerator[i] + (AdultAgeProbability[which(AdultAge==(t1 - tk))] 
                                           * ((1 - mu_A)^(y2 - tk))
                                           * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^T_L)
@@ -778,7 +778,7 @@ logLike_MOP <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   
   Denominator <- 0
   t2 <- 0 # The denominator should be the same for any t2
-  for (y2 in (t2 - T_E - T_L - T_P):(t2 - T_E - T_L)) {
+  for (y2 in (t2 - T_E - T_L - (T_P-1)):(t2 - T_E - T_L)) {
     Denominator <- Denominator + (N_F * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^T_L) 
                                   * ((1 - mu_P)^(t2 - y2 - T_E - T_L)))
   }
@@ -787,18 +787,18 @@ logLike_MOP <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   # This is the expected number of pupae at day t2 from an adult female sampled at 
   # time t1.
   # * By default, let t1 = 0, as the same equation will apply at all times.
-  # * Earliest possible t2 is (-T_A + T_E + T_P), if the mother was caught at the end 
+  # * Earliest possible t2 is (-(T_A-1) + T_E + T_P), if the mother was caught at the end 
   #   of her life & gave birth to the offspring soon after emergence.
-  # * Latest possible t2 is (T_E + T_L + T_P), if the the mother gave birth at the time
+  # * Latest possible t2 is (T_E + T_L + (T_P-1)), if the the mother gave birth at the time
   #   of sampling & the pupa was caught at the end of its life.
-  # * So we will explore (-T_A + T_E + T_L) <= t2 <= (T_E + T_L + T+P)
+  # * So we will explore (-(T_A-1) + T_E + T_L) <= t2 <= (T_E + T_L + (T_P-1))
   
-  Numerator <- rep(0, (abs(-T_A + T_E + T_L) + (T_E + T_L + T_P) + 1))
+  Numerator <- rep(0, (abs(-(T_A-1) + T_E + T_L) + (T_E + T_L + (T_P-1)) + 1))
   
   # Probability of adult surviving from 0 to T_A days:
-  AdultSurvivalProbability <- rep(0, (T_A + 1))
-  AdultAge <- rep(0, (T_A + 1))
-  for (i in 1:(T_A + 1)){
+  AdultSurvivalProbability <- rep(0, T_A)
+  AdultAge <- rep(0, T_A)
+  for (i in 1:T_A){
     AdultSurvivalProbability[i] <- (1 - mu_A)^(i-1)
     AdultAge[i] <- i - 1
   }
@@ -807,11 +807,11 @@ logLike_MOP <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   AdultAgeProbability <- AdultSurvivalProbability / sum(AdultSurvivalProbability)
   
   t1 <- 0 # The relative difference between t1 & t2 is what matters
-  t2 <- seq((-T_A + T_E + T_L), (T_E + T_L + T_P), by=1)
+  t2 <- seq((-(T_A-1) + T_E + T_L), (T_E + T_L + (T_P-1)), by=1)
   
-  for (i in 1:length(t2)) { 
-    for (y2 in (t2[i] - T_E - T_L - T_P):(t2[i] - T_E - T_L)) {
-      if ((y2 >= (t1 - T_A)) && (y2 <= t1)) {
+  for (i in 1:length(t2)) {
+    for (y2 in (t2[i] - T_E - T_L - (T_P-1)):(t2[i] - T_E - T_L)) {
+      if ((y2 >= (t1 - (T_A-1))) && (y2 <= t1)) {
         Numerator[i] <- Numerator[i] + ((1 - mu_A)^(t1 - y2) 
                                         * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^T_L)
                                         * ((1 - mu_P)^(t2[i] - y2 - T_E - T_L)))
@@ -938,7 +938,7 @@ logLike_FOP <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   
   Denominator <- 0
   t2 <- 0 # The denominator should be the same for any t2
-  for (y2 in (t2 - T_E - T_L - T_P):(t2 - T_E - T_L)) {
+  for (y2 in (t2 - T_E - T_L - (T_P-1)):(t2 - T_E - T_L)) {
     Denominator <- Denominator + (N_F * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^T_L) 
                                   * ((1 - mu_P)^(t2 - y2 - T_E - T_L)))
   }
@@ -947,20 +947,20 @@ logLike_FOP <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   # This is the expected number of pupae at day t2 from an adult male sampled at 
   # time t1.
   # * By default, let t1 = 0, as the same equation will apply at all times.
-  # * Earliest possible t2 is (-T_A + T_E + T_L), if the father was caught at the end of 
+  # * Earliest possible t2 is (-(T_A-1) + T_E + T_L), if the father was caught at the end of 
   #   his life, but mated at the beginning of his life, & if the mother gave birth soon
   #   after mating, & the pupa was caught soon after emergence.
-  # * Latest possible t2 is (T_A + T_E + T_L + T_P), if the the father was caught soon 
+  # * Latest possible t2 is ((T_A-1) + T_E + T_L + (T_P-1)), if the the father was caught soon 
   #   after mating, the mother mated at the beginning of her life & laid eggs at the end 
   #   of her life, & the pupa was caught very soon before developing into an adult.
-  # * So we will explore (-T_A + T_E + T_L) <= t2 <= (T_A + T_E + T_L + T_P)
+  # * So we will explore (-(T_A-1) + T_E + T_L) <= t2 <= ((T_A-1) + T_E + T_L + (T_P-1))
   
-  Numerator <- rep(0, (abs(-T_A + T_E + T_L) + (T_A + T_E + T_L + T_P) + 1))
+  Numerator <- rep(0, (abs(-(T_A-1) + T_E + T_L) + ((T_A-1) + T_E + T_L + (T_P-1)) + 1))
   
   # Probability of adult surviving from 0 to T_A days:
-  AdultSurvivalProbability <- rep(0, (T_A + 1))
-  AdultAge <- rep(0, (T_A + 1))
-  for (i in 1:(T_A + 1)){
+  AdultSurvivalProbability <- rep(0, T_A)
+  AdultAge <- rep(0, T_A)
+  for (i in 1:T_A) {
     AdultSurvivalProbability[i] <- (1 - mu_A)^(i-1)
     AdultAge[i] <- i - 1
   }
@@ -969,12 +969,12 @@ logLike_FOP <- function(N_A, mu_A, N_F, T_E, T_L, T_P, T_A,
   AdultAgeProbability <- AdultSurvivalProbability / sum(AdultSurvivalProbability)
   
   t1 <- 0 # The relative difference between t1 & t2 is what matters
-  t2 <- seq((-T_A + T_E + T_L), (T_A + T_E + T_L + T_P), by=1)
+  t2 <- seq((-(T_A-1) + T_E + T_L), ((T_A-1) + T_E + T_L + (T_P-1)), by=1)
   
   for (i in 1:length(t2)) { 
-    for (tk in (t1 - T_A):t1) {
-      for (y2 in tk:(tk + T_A)) {
-        if ((t2[i] >= (y2 + T_E + T_L)) && (t2[i] <= (y2 + T_E + T_L + T_P))) {
+    for (tk in (t1 - (T_A-1)):t1) {
+      for (y2 in tk:(tk + (T_A-1))) {
+        if ((t2[i] >= (y2 + T_E + T_L)) && (t2[i] <= (y2 + T_E + T_L + (T_P-1)))) {
           Numerator[i] <- Numerator[i] + (AdultAgeProbability[which(AdultAge==(t1 - tk))] 
                                           * ((1 - mu_A)^(y2 - tk))
                                           * beta * ((1 - mu_E)^T_E) * ((1 - mu_L)^T_L)
@@ -1104,7 +1104,7 @@ logLike_all <- function(AdultPars) {
   T_E <- 2 # Duration of the egg stage (days)
   T_L <- 5 # Duration of the larval stage (days)
   T_P <- 1 # Duration of the pupal stage (days)
-  T_A <- 30 # Maximum adult lifespan considered (days)
+  T_A <- 67 # Maximum adult lifespan considered (days)
   
   rM <- 1.175 # Daily mosquito population growth rate
   beta <- 20 # Daily egg production rate
@@ -1146,7 +1146,7 @@ logLike_all <- function(AdultPars) {
     logLike <- logLike + logLike_FOA(N_A, mu_A, N_F, T_E, T_L, T_P, T_A, 
                                      beta, mu_E, mu_L, mu_P)
   }
-
+  
   logLike
 }
 
